@@ -57,17 +57,19 @@ const PARALLEL_NON_BLOCKING = true;
 
             // Snippet below originally described in https://github.com/signicode/scramjet/issues/25
 
-            const out = new MultiStream();
+            const out = new DataStream();
 
-            s.each((item) => {
-
+            s.unorder(async (item) => {
                 const str = makeProgressStream(item);
-                out.add(str);
+                process.stdout.write(`                                                               111 ${item.name} \r`)
 
-                return str.whenEnd(); // this keeps the backpressure
-            }).run();
+                await out.pull(str); // this keeps the backpressure
+                process.stdout.write(`                                            333 ${item.name} \r`)
+            }).setOptions({maxParallel: MAX_PARALLEL}).run().then(
+                () => out.end()
+            );
 
-            return out.mux();
+            return out;
         })
         .each(({ name, bar, progress, total }) => {
             bar.state = progress;
