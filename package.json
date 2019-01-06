@@ -10,6 +10,6 @@
   "license": "ISC",
   "dependencies": {
     "multimeter": "^0.1.1",
-    "scramjet": "^4.19.0"
+    "scramjet": "^4.20.0"
   }
 }

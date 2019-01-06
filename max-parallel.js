@@ -22,21 +22,21 @@ const PARALLEL_NON_BLOCKING = true;
 
     const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     const makeProgressStream = (item) => {
-
-        return new DataStream({
-            maxParallel: 1,
-            async promiseRead() {
-
-                await wait(150);
-
-                const delta = Math.ceil(Math.random() * 10);
-                const { progress: prevProgress } = item;
-
-                item.progress = Math.min(prevProgress + delta, item.total);
-
-                return Array(item.progress - prevProgress).fill(item);
-            }
-        });
+        return DataStream
+            .from(function* () {
+                while (item.progress < item.total) {
+                    const delta = Math.ceil(Math.random() * 10);
+                    const { progress: prevProgress } = item;
+                    
+                    item.progress = Math.min(prevProgress + delta, item.total);
+                    
+                    yield new Promise(async res => {
+                        await wait(150);
+                        res(Object.assign({}, item));
+                    });
+                }
+            })
+            .setOptions({maxParallel: 1});
     };
 
     await DataStream.from(items)
@@ -57,22 +57,23 @@ const PARALLEL_NON_BLOCKING = true;
 
             // Snippet below originally described in https://github.com/signicode/scramjet/issues/25
 
-            const out = new MultiStream();
+            const out = new DataStream();
 
-            s.each((item) => {
-
+            s.unorder(async (item) => {
                 const str = makeProgressStream(item);
-                out.add(str);
+                process.stdout.write(`                                                               111 ${item.name} \r`)
 
-                return str.whenEnd(); // this keeps the backpressure
-            }).run();
+                await out.pull(str); // this keeps the backpressure
+                process.stdout.write(`                                            333 ${item.name} \r`)
+            }).setOptions({maxParallel: MAX_PARALLEL}).run().then(
+                () => out.end()
+            );
 
-            return out.mux();
+            return out;
         })
-        .each(({ name, bar, total }) => {
-
-            bar.state++;
-            bar.draw.ratio(bar.state, total, `${name} ${bar.state} / ${total}`);
+        .each(({ name, bar, progress, total }) => {
+            bar.state = progress;
+            bar.draw.ratio(bar.state, total, `${name} ${progress} / ${total}`);
         })
         .run();
 
